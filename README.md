@@ -1,33 +1,208 @@
 # Lead Manager
-1. For the existing `meta_leads` table, remove `lead_status` from n8n's Edit Fields payload first; its database default must remain `CREATED`. Keep the n8n secret credential in n8n only. Take a database backup, then run the entire `supabase/schema.sql` file once in the Supabase SQL editor. The script adds app fields and enables staff access rules without updating existing lead rows. It is transactional; a failed statement rolls back the setup. Do not rerun after a successful setup.
-2. Create users in Auth > Users, then insert each into `profiles` with role admin/manager (see end of schema.sql).
-3. Add executives through the admin dashboard's **Sales executives** tab (or through Supabase Table Editor).
-4. `cp .env.example .env.local`, fill in URL + anon key, then `npm i && npm run dev`.
-5. Deploy: push to GitHub, import in Vercel, set the two public env vars and the server-only secret described below.
 
-## GitHub
+### A mobile-first CRM for Meta leads, team assignment, and sales follow-up
 
-`.env.local` and other environment files are ignored by Git. Only `.env.example`, containing placeholder values, belongs in the repository. Dependencies (`node_modules`), build output (`.next`, `out`), and Vercel's local configuration are also ignored. Commit `package-lock.json` for reproducible dependency installation using `npm ci`.
+[![Next.js](https://img.shields.io/badge/Next.js-14-0b0b0f?logo=nextdotjs&logoColor=white)](https://nextjs.org/)
+[![Supabase](https://img.shields.io/badge/Supabase-PostgreSQL-3fcf8e?logo=supabase&logoColor=white)](https://supabase.com/)
+[![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-3-38bdf8?logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
+[![Tests](https://img.shields.io/badge/tests-29_passing-18c896)](#quality-and-testing)
 
-Create an empty GitHub repository, then connect and push this local repository:
+Lead Manager turns Meta lead submissions into an organized sales pipeline. Leads flow from Google Sheets through n8n into Supabase, where admins and managers can search, filter, assign, reassign, update, and follow up from a fast mobile interface.
 
-```powershell
-git remote add origin https://github.com/YOUR-USERNAME/YOUR-REPOSITORY.git
-git push -u origin main
+<p align="center">
+  <img src="docs/dashboard-mobile.png" alt="Lead Manager mobile dashboard" width="390" />
+</p>
+
+## Highlights
+
+- **Mobile-first dashboard** with a premium dark navy and violet interface
+- **Automatic lead ingestion** from Meta through Google Sheets and n8n
+- **Role-based access** for administrators and managers
+- **Lead assignment workflow** with safe reassignment and unassignment
+- **WhatsApp handoff** to active sales executives
+- **Pipeline tracking** across Created, Assigned, Contacted, Closed, and Lost
+- **Fast filtering** by status, city, search term, and Pakistan-based date ranges
+- **User management** for creating, editing, and removing staff accounts
+- **Sales executive management** for names, WhatsApp numbers, and availability
+- **Duplicate detection** based on normalized WhatsApp numbers
+- **Realtime refresh** when lead records change in Supabase
+
+## How it works
+
+```mermaid
+flowchart LR
+    A[Meta Lead Ads] --> B[Google Sheets]
+    B -->|Every 5 minutes| C[n8n]
+    C -->|Upsert by lead ID| D[(Supabase)]
+    D --> E[Lead Manager]
+    E --> F[Admin]
+    E --> G[Manager]
+    F & G --> H[Sales executives]
+    H -->|WhatsApp follow-up| I[Lead]
 ```
 
-Keep credentials in `.env.local` for local development and in your hosting provider's environment settings for deployment. The pinned framework currently has known dependency advisories; update and validate dependencies before public deployment.
+The n8n workflow owns lead ingestion. The CRM owns assignment, status, notes, staff access, and executive management. Keeping those responsibilities separate prevents scheduled imports from overwriting sales activity.
 
-## User management and reassignment
+## Access model
 
-For an already configured database, run the entire `supabase/user-management.sql` in Supabase SQL Editor (do not rerun the initial schema). Then add `SUPABASE_SECRET_KEY` to `.env.local` and to your hosting server's environment, and restart the app. This is a server-only secret; never use a `NEXT_PUBLIC_` prefix or commit `.env.local`.
+| Capability | Admin | Manager |
+| --- | :---: | :---: |
+| View and filter leads | ✓ | ✓ |
+| Update status and notes | ✓ | ✓ |
+| Assign, reassign, or unassign leads | ✓ | ✓ |
+| Send lead details through WhatsApp | ✓ | ✓ |
+| Manage sales executives | ✓ | — |
+| Create, edit, or delete staff users | ✓ | — |
 
-Admins get a **Manage users** tab to create, edit, or permanently delete admin/manager login accounts. New accounts are confirmed and can sign in immediately with the assigned password. Editing supports name, email, role, and an optional replacement password. Admins cannot delete/demote themselves; a database trigger protects the last admin. Login accounts are separate from sales executives, who remain the lead assignment targets. Removing a login preserves leads and executive assignments, but clears references recording that deleted login as the assigning user.
+Row Level Security protects browser access to CRM data. Staff permissions are checked in PostgreSQL, while privileged Auth administration runs only through the server-side user API. The Supabase secret key must never reach the browser.
 
-Both admins and managers can reassign an assigned lead or confirm unassignment from its detail sheet. Reassignment resets status to `ASSIGNED`; unassignment resets it to `CREATED`. Saved notes are preserved. Stale assignment changes are rejected and must be retried after reopening the lead. Reassignment does not send a WhatsApp message automatically; reopen the lead to resend it to the new executive.
+## Tech stack
 
-Both roles can click the Today, Yesterday, and Last 7 days summary cards, or enter a custom From/To date range. Date boundaries use Pakistan time (Asia/Karachi), and the date filter combines with status, city, and search filters. The dashboard pages through the full leads table so older dates are included.
+| Layer | Technology |
+| --- | --- |
+| Application | Next.js 14, React 18 |
+| Styling | Tailwind CSS and custom responsive CSS |
+| Database and authentication | Supabase Auth and PostgreSQL |
+| Automation | n8n scheduled workflow |
+| Lead source | Meta Lead Ads through Google Sheets |
+| Messaging | WhatsApp deep links |
+| Testing | Node test runner and PGlite |
+| Hosting | Vercel-compatible |
 
-Admins can add/edit sales executive names, WhatsApp numbers, and active status through **Sales executives**. Numbers are normalized for WhatsApp. Inactive executives remain visible on their existing leads but are excluded from new assignment choices. Deletion requires confirmation and is blocked by the existing database foreign key while any leads still reference the executive; reassign/unassign those leads or deactivate the executive instead. These controls use the existing admin-only RLS policy, so no new SQL migration or secret key is needed for executive management. Managers cannot modify executives even by calling Supabase directly.
+## Local setup
 
-Verification: `npm test` checks user API access control, validation, and failure handling using mocked Supabase services, and runs the SQL migration and assignment permissions in an isolated embedded PostgreSQL database. These tests do not modify the live database. `npm run build` checks compilation. With the migration applied, verify manager access is denied at `/api/users`, create/edit/delete a disposable manager through the admin panel, and verify reassignment/unassignment plus notes preservation survive the next n8n sync.
+### Requirements
+
+- Node.js 18.17 or newer
+- npm
+- A Supabase project
+- An existing `public.meta_leads` table populated by the n8n workflow
+
+### 1. Install the application
+
+```bash
+git clone https://github.com/userkami/lead-app.git
+cd lead-app
+npm ci
+```
+
+### 2. Configure environment variables
+
+Copy `.env.example` to `.env.local` and add your Supabase credentials:
+
+```env
+NEXT_PUBLIC_SUPABASE_URL=https://YOUR-PROJECT.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-or-publishable-key
+SUPABASE_SECRET_KEY=your-secret-key
+```
+
+`NEXT_PUBLIC_SUPABASE_ANON_KEY` is safe for the browser and remains constrained by RLS. `SUPABASE_SECRET_KEY` is server-only: never add a `NEXT_PUBLIC_` prefix, paste it into client code, or commit `.env.local`.
+
+### 3. Prepare Supabase
+
+Before the first database setup:
+
+1. Back up the database.
+2. Remove `lead_status` from the n8n **Edit Fields** payload so imports preserve CRM status changes.
+3. Keep the database default for `lead_status` as `CREATED`.
+4. Run [`supabase/schema.sql`](supabase/schema.sql) once in the Supabase SQL Editor.
+
+The initial script is transactional and adds the CRM fields, staff tables, functions, and RLS policies without updating existing lead rows. Do not rerun it after a successful setup.
+
+For a database that already used the original schema, run [`supabase/user-management.sql`](supabase/user-management.sql) once instead. It adds protected staff management, last-admin protection, and safe lead reassignment.
+
+### 4. Start development
+
+```bash
+npm run dev
+```
+
+Open [http://localhost:3000](http://localhost:3000) and sign in with an admin or manager account.
+
+## n8n integration
+
+The scheduled workflow should run every five minutes and upsert leads by the stable Meta lead `id`.
+
+Keep these rules in place:
+
+- Store the `sb_secret_...` credential only inside n8n's credential store.
+- Do not send `lead_status`, assignment fields, or notes in the upsert payload.
+- Map only source-owned Meta fields such as campaign, form, contact, city, platform, and property interest.
+- Use `id` as the conflict target so a repeated import updates the same lead.
+
+This allows n8n to refresh Meta data without resetting the work performed by the sales team.
+
+## Lead assignment behavior
+
+- Assignment sets the lead status to `ASSIGNED`.
+- Reassignment keeps saved notes and resets the status to `ASSIGNED`.
+- Unassignment keeps saved notes and resets the status to `CREATED`.
+- Inactive executives remain visible on existing assignments but cannot receive new leads.
+- Executives referenced by leads cannot be deleted until those leads are reassigned or unassigned.
+- Concurrent assignment changes are checked to prevent one user from silently overwriting another user's newer action.
+
+Date filters use `Asia/Karachi` boundaries and combine with status, city, and text search filters.
+
+## Deploying to Vercel
+
+1. Import this GitHub repository into Vercel.
+2. Add all three environment variables from `.env.example` in the Vercel project settings.
+3. Keep `SUPABASE_SECRET_KEY` available only to the server runtime.
+4. Deploy the `main` branch.
+5. Verify login, user administration, executive management, assignment, notes, and the next n8n synchronization.
+
+Before a public production launch, update and validate framework dependencies against current security advisories.
+
+## Quality and testing
+
+Run the complete validation suite:
+
+```bash
+npm test
+npm run build
+```
+
+The 29 automated tests cover:
+
+- Authentication and admin-only user management
+- Validation, rollback, and failure handling
+- RLS enforcement for admins, managers, non-staff users, and anonymous requests
+- Assignment, reassignment, unassignment, and stale-write protection
+- Last-admin protection
+- Executive lifecycle and foreign-key safety
+- WhatsApp number normalization
+
+Database tests run in isolated PGlite PostgreSQL instances and do not modify the live Supabase project.
+
+## Project structure
+
+```text
+app/
+├── api/users/route.js       # Server-only staff administration API
+├── ExecutivesPanel.js       # Sales executive management
+├── UsersPanel.js            # Admin user management
+├── page.js                  # Dashboard, authentication, and lead workflow
+└── globals.css              # Mobile CRM design system
+lib/
+├── admin-users.mjs          # Authorization and Auth administration
+├── executives.mjs           # Executive validation and data access
+├── phone.mjs                # WhatsApp number normalization
+└── supabase.js              # Browser Supabase client
+supabase/
+├── schema.sql               # Initial database setup
+└── user-management.sql      # Existing-installation upgrade
+tests/                       # API, database, permission, and helper tests
+```
+
+## Security notes
+
+- `.env.local`, build output, local Vercel settings, and dependencies are ignored by Git.
+- The publishable or anon key is intentionally used in the browser and must be protected by RLS.
+- The secret key is used only by the server-side user API and the private n8n credential store.
+- Admin restrictions are enforced on the server and in PostgreSQL, not only hidden in the interface.
+- The final admin cannot be deleted or demoted.
+- Deleting a staff login preserves lead ownership, assignments, and notes.
+
+---
+
+Built for teams that need a focused path from new Meta lead to completed follow-up.
