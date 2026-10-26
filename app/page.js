@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { waNumber, ago } from '../lib/util';
+import { waNumber, ago, pakistanDateKey, dateRangeForPreset } from '../lib/util';
 import UsersPanel from './UsersPanel';
 import ExecutivesPanel from './ExecutivesPanel';
 
@@ -43,18 +43,28 @@ function Leads() {
   const [leads, setLeads] = useState([]), [execs, setExecs] = useState([]), [me, setMe] = useState(null);
   const [st, setSt] = useState('UNASSIGNED'), [q, setQ] = useState(''), [city, setCity] = useState(''), [open, setOpen] = useState(null);
   const [view, setView] = useState('leads'), [loadError, setLoadError] = useState('');
+  const [datePreset, setDatePreset] = useState('all'), [customFrom, setCustomFrom] = useState(''), [customTo, setCustomTo] = useState('');
   useEffect(() => { if (me?.role !== 'admin') setView('leads'); }, [me?.role]);
 
   const load = async () => {
-    const [l, e, p] = await Promise.all([
-      supabase.from('meta_leads').select('*').order('created_time', { ascending: false }).limit(1000),
+    const allLeads = [];
+    let offset = 0;
+    let leadError = null;
+    do {
+      const page = await supabase.from('meta_leads').select('*').order('created_time', { ascending: false }).range(offset, offset + 999);
+      if (page.error) { leadError = page.error; break; }
+      allLeads.push(...(page.data || []));
+      if ((page.data || []).length < 1000) break;
+      offset += 1000;
+    } while (true);
+    const [e, p] = await Promise.all([
       supabase.from('sales_executives').select('*').order('name'),
       supabase.from('profiles').select('full_name,role').maybeSingle(),
     ]);
-    const error = l.error || e.error || p.error;
+    const error = leadError || e.error || p.error;
     setLoadError(error ? error.message : '');
-    if (l.error || e.error || p.error) return;
-    setLeads(l.data || []); setExecs(e.data || []); setMe(p.data);
+    if (leadError || e.error || p.error) return;
+    setLeads(allLeads); setExecs(e.data || []); setMe(p.data);
   };
   useEffect(() => {
     load();
@@ -65,12 +75,22 @@ function Leads() {
   const exName = useMemo(() => Object.fromEntries(execs.map((x) => [x.id, x.name])), [execs]);
   const dup = useMemo(() => { const m = {}; leads.forEach((l) => { const k = waNumber(l.whatsapp_number); m[k] = (m[k] || 0) + 1; }); return m; }, [leads]);
   const cities = useMemo(() => [...new Set(leads.map((l) => l.city).filter(Boolean))].sort(), [leads]);
+  const dateRange = datePreset === 'custom' ? { from: customFrom, to: customTo } : dateRangeForPreset(datePreset);
+  const inDateRange = (lead) => {
+    if (!dateRange.from && !dateRange.to) return true;
+    const key = pakistanDateKey(lead.created_time);
+    return (!dateRange.from || key >= dateRange.from) && (!dateRange.to || key <= dateRange.to);
+  };
   const shown = leads.filter((l) =>
+    inDateRange(l) &&
     (st === 'ALL' || (st === 'UNASSIGNED' ? !l.assigned_to : l.assigned_to && l.lead_status === st)) &&
     (!city || l.city === city) &&
     (!q || ((l.full_name || '') + (l.whatsapp_number || '')).toLowerCase().includes(q.toLowerCase())));
   const unassigned = leads.filter((l) => !l.assigned_to).length;
-  const today = leads.filter((l) => new Date(l.created_time).toDateString() === new Date().toDateString()).length;
+  const today = leads.filter((l) => pakistanDateKey(l.created_time) === pakistanDateKey()).length;
+  const yesterday = leads.filter((l) => pakistanDateKey(l.created_time) === dateRangeForPreset('yesterday').from).length;
+  const last7 = leads.filter((l) => { const key = pakistanDateKey(l.created_time); const range = dateRangeForPreset('last7'); return key >= range.from && key <= range.to; }).length;
+  const applyPreset = (preset) => { setDatePreset(preset); if (preset !== 'custom') { setCustomFrom(''); setCustomTo(''); } };
 
   return (
     <main className="max-w-2xl mx-auto pb-24">
@@ -78,7 +98,9 @@ function Leads() {
         <div className="flex items-center justify-between">
           <div className="flex gap-2 text-sm">
             <span className="rounded-lg bg-amber-100 px-2.5 py-1 font-medium">{unassigned} unassigned</span>
-            <span className="rounded-lg bg-slate-200 px-2.5 py-1">{today} today</span>
+            <button aria-pressed={datePreset === 'today'} onClick={() => applyPreset('today')} className={`rounded-lg px-2.5 py-1 ${datePreset === 'today' ? 'bg-slate-900 text-white' : 'bg-slate-200'}`}>{today} today</button>
+            <button aria-pressed={datePreset === 'yesterday'} onClick={() => applyPreset('yesterday')} className={`rounded-lg px-2.5 py-1 ${datePreset === 'yesterday' ? 'bg-slate-900 text-white' : 'bg-slate-200'}`}>{yesterday} yesterday</button>
+            <button aria-pressed={datePreset === 'last7'} onClick={() => applyPreset('last7')} className={`rounded-lg px-2.5 py-1 ${datePreset === 'last7' ? 'bg-slate-900 text-white' : 'bg-slate-200'}`}>{last7} last 7 days</button>
           </div>
           <button className="text-sm text-slate-500" onClick={() => supabase.auth.signOut()}>
             {me?.role ? me.role + ' · ' : ''}Sign out
@@ -100,6 +122,15 @@ function Leads() {
           <option value="">All cities</option>
           {cities.map((c) => <option key={c}>{c}</option>)}
         </select>
+        <div className="flex gap-2 items-end">
+          <label className="text-xs flex-1">From
+            <input className="inp mt-1" type="date" value={customFrom} onChange={(e) => { setCustomFrom(e.target.value); setDatePreset('custom'); }} />
+          </label>
+          <label className="text-xs flex-1">To
+            <input className="inp mt-1" type="date" value={customTo} onChange={(e) => { setCustomTo(e.target.value); setDatePreset('custom'); }} />
+          </label>
+          {(datePreset !== 'all') && <button className="btn bg-white border" onClick={() => applyPreset('all')}>Clear dates</button>}
+        </div>
         </>}
       </header>
 
