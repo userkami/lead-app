@@ -107,12 +107,12 @@ function Leads() {
   return (
     <main className="app-shell">
       <header className="app-header">
-        <div className="brand-lockup"><span className="brand-mark"><Icon name="spark"/></span><div>Lead Manager<span className="eyebrow">{me?.role || 'Team'} WORKSPACE</span></div></div>
+        <div className="brand-lockup"><span className="brand-mark"><Icon name="spark"/></span><div>Lead Manager<span className="eyebrow">MOBILE CRM · {me?.role || 'Team'}</span></div></div>
         <button className="icon-button" aria-label="Sign out" title="Sign out" onClick={() => supabase.auth.signOut()}><Icon name="logout"/></button>
       </header>
       {view === 'leads' && <section className="dashboard-top">
-        <div className="welcome-row"><div><p className="eyebrow">YOUR PIPELINE, IN FOCUS</p><h1>Hello{me?.full_name ? `, ${me.full_name.split(' ')[0]}` : ' there'}<span className="accent">.</span></h1><p className="welcome-copy">Make every lead a new possibility.</p></div><span className="profile-avatar">{(me?.full_name || 'LM').slice(0, 2).toUpperCase()}</span></div>
-        <div className="overview-card"><div><span className="eyebrow">READY FOR A CONNECTION</span><div className="overview-number">{unassigned}<span>unassigned leads</span></div></div><button className="overview-link" onClick={() => { setSt('UNASSIGNED'); applyPreset('all'); setQ(''); setCity(''); }}>View leads<Icon name="arrow" size={18}/></button></div>
+        <div className="welcome-row"><div><p className="eyebrow">YOUR PIPELINE, IN FOCUS</p><h1>Dashboard<span className="accent">.</span></h1></div><span className="profile-avatar">{(me?.full_name || 'LM').slice(0, 2).toUpperCase()}</span></div>
+        <div className="overview-card"><div><span className="overview-greeting">Welcome Back</span><div className="overview-name">{me?.full_name || 'Team member'}</div><div className="overview-number"><Icon name="users" size={18}/><span>{unassigned} unassigned {unassigned === 1 ? 'lead is' : 'leads are'} ready for follow-up</span></div></div><button className="overview-link" onClick={() => { setSt('UNASSIGNED'); applyPreset('all'); setQ(''); setCity(''); }}>View<Icon name="arrow" size={18}/></button></div>
         <div className="date-stats" aria-label="Lead date filters">
           {[['today', 'Today', today], ['yesterday', 'Yesterday', yesterday], ['last7', 'Last 7 days', last7]].map(([preset, label, count]) => <button key={preset} aria-pressed={datePreset === preset} className={`stat-card ${datePreset === preset ? 'selected' : ''}`} onClick={() => applyPreset(preset)}><span>{label}<Icon name="arrow" size={14}/></span><strong>{count}</strong><small>leads received</small></button>)}
         </div>
