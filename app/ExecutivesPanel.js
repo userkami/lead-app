@@ -45,7 +45,7 @@ export default function ExecutivesPanel({ executives, onUpdated }) {
   }
 
   return (
-    <section className="p-3 space-y-4" aria-labelledby="executives-title">
+    <section className="management-panel panel-page space-y-4" aria-labelledby="executives-title">
       <div>
         <h1 id="executives-title" className="text-xl font-semibold">Sales executives</h1>
         <p className="text-sm text-slate-600">Manage the people receiving leads through WhatsApp. These records do not create login accounts.</p>

@@ -1,9 +1,10 @@
 'use client';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { waNumber, ago, pakistanDateKey, dateRangeForPreset } from '../lib/util';
 import UsersPanel from './UsersPanel';
 import ExecutivesPanel from './ExecutivesPanel';
+import Icon from './Icon';
 
 const STATUSES = ['UNASSIGNED', 'ASSIGNED', 'CONTACTED', 'CLOSED', 'LOST', 'ALL'];
 const chip = { CREATED: 'bg-amber-100 text-amber-800', ASSIGNED: 'bg-blue-100 text-blue-800', CONTACTED: 'bg-violet-100 text-violet-800', CLOSED: 'bg-green-100 text-green-800', LOST: 'bg-slate-200 text-slate-700' };
@@ -15,26 +16,35 @@ export default function App() {
     const { data: s } = supabase.auth.onAuthStateChange((_e, x) => setSession(x));
     return () => s.subscription.unsubscribe();
   }, []);
-  if (session === undefined) return null;
+  if (session === undefined) return <main className="app-loading"><span className="brand-mark"><Icon name="spark" size={28}/></span><p>Opening your workspace…</p></main>;
   return session ? <Leads /> : <Login />;
 }
 
 function Login() {
   const [email, setEmail] = useState(''), [pw, setPw] = useState(''), [err, setErr] = useState('');
+  const [pending, setPending] = useState(false);
   const go = async (e) => {
     e.preventDefault();
-    const { error } = await supabase.auth.signInWithPassword({ email, password: pw });
-    if (error) setErr(error.message);
+    setPending(true); setErr('');
+    try {
+      const { error } = await supabase.auth.signInWithPassword({ email, password: pw });
+      if (error) setErr(error.message);
+    } catch { setErr('Could not sign in. Check your connection and try again.'); }
+    finally { setPending(false); }
   };
   return (
-    <main className="min-h-screen grid place-items-center p-6">
-      <form onSubmit={go} className="w-full max-w-sm space-y-3 bg-white p-6 rounded-2xl shadow">
-        <h1 className="text-xl font-semibold">Lead Manager</h1>
-        <input className="inp" type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} required />
-        <input className="inp" type="password" placeholder="Password" value={pw} onChange={(e) => setPw(e.target.value)} required />
-        {err && <p className="text-sm text-red-600">{err}</p>}
-        <button className="btn w-full bg-slate-900 text-white">Sign in</button>
+    <main className="login-screen">
+      <div className="login-brand"><span className="brand-mark"><Icon name="spark" size={28}/></span><span>Lead Manager<span className="eyebrow">YOUR SALES WORKSPACE</span></span></div>
+      <div className="login-intro"><span className="eyebrow">EVERY CONNECTION COUNTS</span><h1>Your next opportunity<br/>starts here<span>.</span></h1><p>A focused space for your leads, your team,<br/>and everything that comes next.</p></div>
+      <form onSubmit={go} className="login-card">
+        <h2>Welcome back</h2><p>Sign in to your workspace.</p>
+        <label>Email address<input className="inp" type="email" autoComplete="username" placeholder="you@company.com" value={email} onChange={(e) => setEmail(e.target.value)} required /></label>
+        <label>Password<input className="inp" type="password" autoComplete="current-password" placeholder="Enter your password" value={pw} onChange={(e) => setPw(e.target.value)} required /></label>
+        {err && <p role="alert" className="form-error">{err}</p>}
+        <button disabled={pending} className="btn primary login-submit">{pending ? 'Signing in…' : 'Sign in'}<Icon name="arrow"/></button>
+        <span className="login-footnote">Access for authorized team members</span>
       </form>
+      <p className="login-footer">Built for meaningful connections.</p>
     </main>
   );
 }
@@ -44,6 +54,7 @@ function Leads() {
   const [st, setSt] = useState('UNASSIGNED'), [q, setQ] = useState(''), [city, setCity] = useState(''), [open, setOpen] = useState(null);
   const [view, setView] = useState('leads'), [loadError, setLoadError] = useState('');
   const [datePreset, setDatePreset] = useState('all'), [customFrom, setCustomFrom] = useState(''), [customTo, setCustomTo] = useState('');
+  const [filtersOpen, setFiltersOpen] = useState(false), [loading, setLoading] = useState(true);
   useEffect(() => { if (me?.role !== 'admin') setView('leads'); }, [me?.role]);
 
   const load = async () => {
@@ -63,6 +74,7 @@ function Leads() {
     ]);
     const error = leadError || e.error || p.error;
     setLoadError(error ? error.message : '');
+    setLoading(false);
     if (leadError || e.error || p.error) return;
     setLeads(allLeads); setExecs(e.data || []); setMe(p.data);
   };
@@ -93,77 +105,85 @@ function Leads() {
   const applyPreset = (preset) => { setDatePreset(preset); if (preset !== 'custom') { setCustomFrom(''); setCustomTo(''); } };
 
   return (
-    <main className="max-w-2xl mx-auto pb-24">
-      <header className="sticky top-0 z-10 bg-slate-50/95 backdrop-blur p-3 space-y-2 border-b">
-        <div className="flex items-center justify-between">
-          <div className="flex gap-2 text-sm">
-            <span className="rounded-lg bg-amber-100 px-2.5 py-1 font-medium">{unassigned} unassigned</span>
-            <button aria-pressed={datePreset === 'today'} onClick={() => applyPreset('today')} className={`rounded-lg px-2.5 py-1 ${datePreset === 'today' ? 'bg-slate-900 text-white' : 'bg-slate-200'}`}>{today} today</button>
-            <button aria-pressed={datePreset === 'yesterday'} onClick={() => applyPreset('yesterday')} className={`rounded-lg px-2.5 py-1 ${datePreset === 'yesterday' ? 'bg-slate-900 text-white' : 'bg-slate-200'}`}>{yesterday} yesterday</button>
-            <button aria-pressed={datePreset === 'last7'} onClick={() => applyPreset('last7')} className={`rounded-lg px-2.5 py-1 ${datePreset === 'last7' ? 'bg-slate-900 text-white' : 'bg-slate-200'}`}>{last7} last 7 days</button>
-          </div>
-          <button className="text-sm text-slate-500" onClick={() => supabase.auth.signOut()}>
-            {me?.role ? me.role + ' · ' : ''}Sign out
-          </button>
+    <main className="app-shell">
+      <header className="app-header">
+        <div className="brand-lockup"><span className="brand-mark"><Icon name="spark"/></span><div>Lead Manager<span className="eyebrow">{me?.role || 'Team'} WORKSPACE</span></div></div>
+        <button className="icon-button" aria-label="Sign out" title="Sign out" onClick={() => supabase.auth.signOut()}><Icon name="logout"/></button>
+      </header>
+      {view === 'leads' && <section className="dashboard-top">
+        <div className="welcome-row"><div><p className="eyebrow">YOUR PIPELINE, IN FOCUS</p><h1>Hello{me?.full_name ? `, ${me.full_name.split(' ')[0]}` : ' there'}<span className="accent">.</span></h1><p className="welcome-copy">Make every lead a new possibility.</p></div><span className="profile-avatar">{(me?.full_name || 'LM').slice(0, 2).toUpperCase()}</span></div>
+        <div className="overview-card"><div><span className="eyebrow">READY FOR A CONNECTION</span><div className="overview-number">{unassigned}<span>unassigned leads</span></div></div><button className="overview-link" onClick={() => { setSt('UNASSIGNED'); applyPreset('all'); setQ(''); setCity(''); }}>View leads<Icon name="arrow" size={18}/></button></div>
+        <div className="date-stats" aria-label="Lead date filters">
+          {[['today', 'Today', today], ['yesterday', 'Yesterday', yesterday], ['last7', 'Last 7 days', last7]].map(([preset, label, count]) => <button key={preset} aria-pressed={datePreset === preset} className={`stat-card ${datePreset === preset ? 'selected' : ''}`} onClick={() => applyPreset(preset)}><span>{label}<Icon name="arrow" size={14}/></span><strong>{count}</strong><small>leads received</small></button>)}
         </div>
-        {me?.role === 'admin' && <nav className="flex gap-2 overflow-x-auto whitespace-nowrap [&>button]:shrink-0" aria-label="Dashboard">
-          <button aria-pressed={view === 'leads'} onClick={() => setView('leads')} className={`btn ${view === 'leads' ? 'bg-slate-900 text-white' : 'bg-white border'}`}>Leads</button>
-          <button aria-pressed={view === 'users'} onClick={() => setView('users')} className={`btn ${view === 'users' ? 'bg-slate-900 text-white' : 'bg-white border'}`}>Manage users</button>
-          <button aria-pressed={view === 'executives'} onClick={() => setView('executives')} className={`btn ${view === 'executives' ? 'bg-slate-900 text-white' : 'bg-white border'}`}>Sales executives</button>
-        </nav>}
-        {view === 'leads' && <>
-        <input className="inp" placeholder="Search name or number" value={q} onChange={(e) => setQ(e.target.value)} />
-        <div className="flex gap-2 overflow-x-auto">
+        <div className="search-row"><label className="search-box"><Icon name="search"/><input aria-label="Search leads" placeholder="Search name or number" value={q} onChange={(e) => setQ(e.target.value)}/>{q && <button aria-label="Clear search" onClick={() => setQ('')}><Icon name="close" size={16}/></button>}</label><button aria-expanded={filtersOpen} aria-controls="advanced-filters" aria-label="City and date filters" className={`icon-button filter-toggle ${filtersOpen || city || datePreset === 'custom' ? 'selected' : ''}`} onClick={() => setFiltersOpen(!filtersOpen)}><Icon name="filter"/></button></div>
+        <div className="status-tabs" aria-label="Lead status">
           {STATUSES.map((s) => (
-            <button key={s} onClick={() => setSt(s)} className={`whitespace-nowrap rounded-full px-3 py-1.5 text-sm ${st === s ? 'bg-slate-900 text-white' : 'bg-white border'}`}>{s[0] + s.slice(1).toLowerCase()}</button>
+            <button key={s} aria-pressed={st === s} onClick={() => setSt(s)} className={st === s ? 'selected' : ''}>{s[0] + s.slice(1).toLowerCase()}</button>
           ))}
         </div>
-        <select className="inp" value={city} onChange={(e) => setCity(e.target.value)}>
+        {filtersOpen && <div id="advanced-filters" className="advanced-filters"><div className="filter-heading"><span><Icon name="filter" size={16}/>Refine your leads</span><button onClick={() => { setCity(''); applyPreset('all'); }}>Reset filters</button></div><label className="field-label">City<select className="inp" value={city} onChange={(e) => setCity(e.target.value)}>
           <option value="">All cities</option>
           {cities.map((c) => <option key={c}>{c}</option>)}
-        </select>
-        <div className="flex gap-2 items-end">
-          <label className="text-xs flex-1">From
+        </select></label>
+        <div className="date-inputs">
+          <label className="field-label">From
             <input className="inp mt-1" type="date" value={customFrom} onChange={(e) => { setCustomFrom(e.target.value); setDatePreset('custom'); }} />
           </label>
-          <label className="text-xs flex-1">To
+          <label className="field-label">To
             <input className="inp mt-1" type="date" value={customTo} onChange={(e) => { setCustomTo(e.target.value); setDatePreset('custom'); }} />
           </label>
-          {(datePreset !== 'all') && <button className="btn bg-white border" onClick={() => applyPreset('all')}>Clear dates</button>}
-        </div>
-        </>}
-      </header>
+        </div><p className="timezone-note">Dates use Pakistan time · UTC+5</p></div>}
+        <div className="results-heading"><h2>{st === 'ALL' ? 'All leads' : st[0] + st.slice(1).toLowerCase() + ' leads'}<span>{shown.length}</span></h2>{(datePreset !== 'all' || city) && <button className="clear-filter" onClick={() => { applyPreset('all'); setCity(''); }}>Clear filters<Icon name="close" size={13}/></button>}</div>
+      </section>}
 
       {loadError && <p role="alert" className="m-3 rounded-xl bg-red-50 p-3 text-red-700">{loadError}</p>}
       {view === 'users' && me?.role === 'admin' ? <UsersPanel onUpdated={load} /> : view === 'executives' && me?.role === 'admin' ? <ExecutivesPanel executives={execs} onUpdated={load} /> : <>
-      <div className="p-3 space-y-2">
+      <div className="lead-list">
+        {loading && <div className="empty-state" role="status"><Icon name="refresh" size={28}/><h3>Getting your leads ready</h3><p>Your workspace is loading.</p></div>}
         {shown.map((l) => (
-          <button key={l.id} onClick={() => setOpen(l)} className="w-full text-left bg-white rounded-2xl p-4 shadow-sm active:bg-slate-100">
-            <div className="flex justify-between gap-2">
-              <span className="font-semibold">{l.full_name || 'No name'}</span>
-              <span className="text-xs text-slate-500">{ago(l.created_time)}</span>
-            </div>
-            <div className="text-sm text-slate-600 mt-0.5">{l.city || '—'} · {l.property_type_interest || '—'}</div>
-            <div className="flex flex-wrap gap-1.5 mt-2 text-xs">
-              <span className={`rounded-full px-2 py-0.5 ${chip[l.lead_status] || chip.CREATED}`}>{l.assigned_to ? `${l.lead_status} · ${exName[l.assigned_to] || ''}` : 'UNASSIGNED'}</span>
-              {l.priority && <span className="rounded-full bg-red-100 text-red-700 px-2 py-0.5">{l.priority}</span>}
-              {dup[waNumber(l.whatsapp_number)] > 1 && <span className="rounded-full bg-orange-100 text-orange-700 px-2 py-0.5">Duplicate</span>}
-            </div>
+          <button key={l.id} onClick={() => setOpen(l)} className="lead-card">
+            <div className="lead-card-top"><span className={`lead-avatar tone-${(l.full_name || '').length % 4}`}>{(l.full_name || '?').split(' ').filter(Boolean).slice(0, 2).map((part) => part[0]).join('')}</span><div className="lead-identity"><h3>{l.full_name || 'No name'}</h3><span><Icon name="location" size={12}/>{l.city || 'Location unavailable'}</span></div><span className="lead-time">{ago(l.created_time)}</span></div>
+            <div className="lead-interest"><Icon name="briefcase" size={14}/><span>{l.property_type_interest || 'Property interest not specified'}</span></div>
+            <div className="lead-card-bottom"><div className="lead-badges"><span className={`status-pill status-${l.assigned_to ? (l.lead_status || 'ASSIGNED').toLowerCase() : 'unassigned'}`}>{l.assigned_to ? (l.lead_status || 'ASSIGNED').toLowerCase() : 'Unassigned'}</span>{l.priority && <span className="status-pill status-lost">{l.priority}</span>}{dup[waNumber(l.whatsapp_number)] > 1 && <span className="status-pill status-unassigned">Duplicate</span>}</div><span className="lead-open"><Icon name="chevron" size={16}/></span></div>
+            {l.assigned_to && <p className="lead-owner">Assigned to {exName[l.assigned_to] || 'executive'}</p>}
           </button>
         ))}
-        {!shown.length && <p className="text-center text-slate-500 py-12">No leads here.</p>}
+        {!loading && !shown.length && <div className="empty-state"><Icon name="search" size={30}/><h3>A little room for opportunity</h3><p>No leads match these filters.</p><button className="btn secondary" onClick={() => { setSt('ALL'); setCity(''); setQ(''); applyPreset('all'); }}>Show all leads</button></div>}
       </div>
 
       {open && <Sheet lead={open} execs={execs} exName={exName} dup={dup} reload={load} onClose={() => setOpen(null)} />}
       </>}
+      <nav className="bottom-nav" aria-label="Main navigation"><button aria-current={view === 'leads' ? 'page' : undefined} onClick={() => setView('leads')}><Icon name="grid"/><span>Leads</span></button>{me?.role === 'admin' && <><button aria-current={view === 'executives' ? 'page' : undefined} onClick={() => setView('executives')}><Icon name="briefcase"/><span>Executives</span></button><button aria-current={view === 'users' ? 'page' : undefined} onClick={() => setView('users')}><Icon name="users"/><span>Team</span></button></>}<button onClick={load} aria-label="Refresh workspace"><Icon name="refresh"/><span>Refresh</span></button></nav>
     </main>
   );
 }
 
 function Sheet({ lead, execs, exName, dup, reload, onClose }) {
+  const dialogRef = useRef(null);
+  useEffect(() => {
+    const previousFocus = document.activeElement;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    dialogRef.current?.querySelector('button')?.focus();
+    return () => { document.body.style.overflow = previousOverflow; previousFocus?.focus(); };
+  }, []);
   const [notes, setNotes] = useState(lead.notes || '');
   const [pending, setPending] = useState(false), [error, setError] = useState('');
   const [nextOwner, setNextOwner] = useState(''), [confirmUnassign, setConfirmUnassign] = useState(false);
+  useEffect(() => {
+    const onKey = (event) => {
+      if (event.key === 'Escape' && !pending) { event.preventDefault(); onClose(); }
+      if (event.key === 'Tab') {
+        const controls = [...(dialogRef.current?.querySelectorAll('button, a[href], input, textarea, select') || [])].filter((el) => !el.matches(':disabled') && el.getClientRects().length);
+        const first = controls[0], last = controls[controls.length - 1];
+        if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+        else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+      }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [pending, onClose]);
   const activeExecs = execs.filter((ex) => ex.active);
   const num = waNumber(lead.whatsapp_number);
   const msg = `New lead: ${lead.full_name} | +${num} | ${lead.city || '-'} | Interested in: ${lead.property_type_interest || '-'}`;
@@ -197,16 +217,17 @@ function Sheet({ lead, execs, exName, dup, reload, onClose }) {
   const owner = execs.find((x) => x.id === lead.assigned_to);
 
   return (
-    <div className="fixed inset-0 z-20 bg-black/40 flex items-end sm:items-center justify-center" onClick={() => { if (!pending) onClose(); }}>
-      <div role="dialog" aria-modal="true" aria-labelledby="lead-title" className="bg-white w-full max-w-lg rounded-t-3xl sm:rounded-3xl p-5 max-h-[90vh] overflow-y-auto space-y-4" onClick={(e) => e.stopPropagation()}>
+    <div className="sheet-backdrop" onClick={() => { if (!pending) onClose(); }}>
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="lead-title" className="lead-sheet management-panel space-y-4" onClick={(e) => e.stopPropagation()}>
+        <div className="sheet-handle"/><div className="sheet-topline"><span className="eyebrow">LEAD DETAILS</span><button disabled={pending} className="icon-button" aria-label="Close lead details" onClick={onClose}><Icon name="close"/></button></div>
         <div>
           <h2 id="lead-title" className="text-lg font-semibold">{lead.full_name}</h2>
           <p className="text-sm text-slate-600">{lead.city} · {lead.property_type_interest}</p>
           <p className="text-sm text-slate-600">+{num} {dup[num] > 1 && <b className="text-orange-600">(appears {dup[num]}×)</b>}</p>
           <p className="text-xs text-slate-400 mt-1">{lead.campaign_name} · {lead.platform}</p>
           <div className="flex gap-2 mt-3">
-            <a className="btn bg-slate-100" href={`tel:+${num}`}>Call</a>
-            <a className="btn bg-green-100 text-green-800" href={`https://wa.me/${num}`}>WhatsApp lead</a>
+            <a className="btn secondary" href={`tel:+${num}`}><Icon name="phone" size={16}/>Call</a>
+            <a className="btn primary" href={`https://wa.me/${num}`}><Icon name="chat" size={16}/>WhatsApp</a>
           </div>
         </div>
 

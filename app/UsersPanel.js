@@ -56,7 +56,7 @@ export default function UsersPanel({ onUpdated }) {
   const set = (field) => (event) => setDraft({ ...draft, [field]: event.target.value });
 
   return (
-    <section className="p-3 space-y-4" aria-labelledby="users-title">
+    <section className="management-panel panel-page space-y-4" aria-labelledby="users-title">
       <div>
         <h1 id="users-title" className="text-xl font-semibold">Manage users</h1>
         <p className="text-sm text-slate-600">Admin and manager login accounts. Both roles can assign, reassign, and unassign leads.</p>

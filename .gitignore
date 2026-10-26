@@ -12,3 +12,4 @@ coverage/
 *.tsbuildinfo
 .DS_Store
 Thumbs.db
+.ui-review/
