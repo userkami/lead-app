@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { waNumber, ago } from '../lib/util';
 import UsersPanel from './UsersPanel';
+import ExecutivesPanel from './ExecutivesPanel';
 
 const STATUSES = ['UNASSIGNED', 'ASSIGNED', 'CONTACTED', 'CLOSED', 'LOST', 'ALL'];
 const chip = { CREATED: 'bg-amber-100 text-amber-800', ASSIGNED: 'bg-blue-100 text-blue-800', CONTACTED: 'bg-violet-100 text-violet-800', CLOSED: 'bg-green-100 text-green-800', LOST: 'bg-slate-200 text-slate-700' };
@@ -42,6 +43,7 @@ function Leads() {
   const [leads, setLeads] = useState([]), [execs, setExecs] = useState([]), [me, setMe] = useState(null);
   const [st, setSt] = useState('UNASSIGNED'), [q, setQ] = useState(''), [city, setCity] = useState(''), [open, setOpen] = useState(null);
   const [view, setView] = useState('leads'), [loadError, setLoadError] = useState('');
+  useEffect(() => { if (me?.role !== 'admin') setView('leads'); }, [me?.role]);
 
   const load = async () => {
     const [l, e, p] = await Promise.all([
@@ -82,9 +84,10 @@ function Leads() {
             {me?.role ? me.role + ' · ' : ''}Sign out
           </button>
         </div>
-        {me?.role === 'admin' && <nav className="flex gap-2" aria-label="Dashboard">
+        {me?.role === 'admin' && <nav className="flex gap-2 overflow-x-auto whitespace-nowrap [&>button]:shrink-0" aria-label="Dashboard">
           <button aria-pressed={view === 'leads'} onClick={() => setView('leads')} className={`btn ${view === 'leads' ? 'bg-slate-900 text-white' : 'bg-white border'}`}>Leads</button>
           <button aria-pressed={view === 'users'} onClick={() => setView('users')} className={`btn ${view === 'users' ? 'bg-slate-900 text-white' : 'bg-white border'}`}>Manage users</button>
+          <button aria-pressed={view === 'executives'} onClick={() => setView('executives')} className={`btn ${view === 'executives' ? 'bg-slate-900 text-white' : 'bg-white border'}`}>Sales executives</button>
         </nav>}
         {view === 'leads' && <>
         <input className="inp" placeholder="Search name or number" value={q} onChange={(e) => setQ(e.target.value)} />
@@ -101,7 +104,7 @@ function Leads() {
       </header>
 
       {loadError && <p role="alert" className="m-3 rounded-xl bg-red-50 p-3 text-red-700">{loadError}</p>}
-      {view === 'users' && me?.role === 'admin' ? <UsersPanel onUpdated={load} /> : <>
+      {view === 'users' && me?.role === 'admin' ? <UsersPanel onUpdated={load} /> : view === 'executives' && me?.role === 'admin' ? <ExecutivesPanel executives={execs} onUpdated={load} /> : <>
       <div className="p-3 space-y-2">
         {shown.map((l) => (
           <button key={l.id} onClick={() => setOpen(l)} className="w-full text-left bg-white rounded-2xl p-4 shadow-sm active:bg-slate-100">

@@ -42,6 +42,8 @@ test('database migration and assignment permissions in isolated PostgreSQL', asy
     update public.meta_leads set notes = 'Keep these notes', assigned_to = '${executive}',
       assigned_by = '${manager}', assigned_at = '2026-10-26T01:00:00Z' where id = 'existing';
     grant select on public.profiles, public.meta_leads, public.sales_executives to authenticated;
+    grant insert, update, delete on public.sales_executives to authenticated, anon;
+    grant select on public.sales_executives to anon;
   `);
   const migration = await readFile(new URL('../supabase/user-management.sql', import.meta.url), 'utf8');
   const before = (await db.query("select * from public.meta_leads where id = 'existing'")).rows[0];
@@ -106,6 +108,34 @@ test('database migration and assignment permissions in isolated PostgreSQL', asy
     await assert.rejects(db.query('delete from public.profiles where id = $1', [admin]), /last admin cannot be deleted/);
     await assert.rejects(db.query('delete from auth.users where id = $1', [admin]), /last admin cannot be deleted/);
     assert.equal((await db.query('select role from public.profiles where id = $1', [admin])).rows[0].role, 'admin');
+  });
+  await t.test('admin can create, edit, deactivate, reactivate, and delete an unassigned executive', async () => {
+    const created = await actor(admin, () => db.query("insert into public.sales_executives (name, whatsapp_number) values ('New executive', '923001234560') returning id", []));
+    const id = created.rows[0].id;
+    const updated = await actor(admin, () => db.query("update public.sales_executives set name = 'Updated executive', whatsapp_number = '923001234561', active = false where id = $1 returning *", [id]));
+    assert.equal(updated.rows[0].name, 'Updated executive');
+    assert.equal(updated.rows[0].whatsapp_number, '923001234561');
+    assert.equal(updated.rows[0].active, false);
+    await actor(admin, () => db.query('update public.sales_executives set active = true where id = $1', [id]));
+    assert.equal((await db.query('select active from public.sales_executives where id = $1', [id])).rows[0].active, true);
+    const deleted = await actor(admin, () => db.query('delete from public.sales_executives where id = $1 returning id', [id]));
+    assert.equal(deleted.rows[0].id, id);
+  });
+  await t.test('manager and anonymous requests cannot create, update, or delete executives', async () => {
+    for (const [id, role] of [[manager, 'authenticated'], [null, 'anon']]) {
+      await assert.rejects(actor(id, () => db.query("insert into public.sales_executives (name, whatsapp_number) values ('Not allowed', '923001234560')"), role), /row-level security/);
+      assert.equal((await actor(id, () => db.query("update public.sales_executives set name = 'Not allowed' where id = $1 returning id", [executive]), role)).rows.length, 0);
+      assert.equal((await actor(id, () => db.query('delete from public.sales_executives where id = $1 returning id', [executive]), role)).rows.length, 0);
+    }
+    assert.equal((await db.query('select name from public.sales_executives where id = $1', [executive])).rows[0].name, 'Executive One');
+  });
+  await t.test('assigned executive cannot be deleted; deactivation keeps leads and notes intact', async () => {
+    const row = await lead('existing');
+    await assert.rejects(actor(admin, () => db.query('delete from public.sales_executives where id = $1', [executive])), (e) => e.code === '23503');
+    await actor(admin, () => db.query('update public.sales_executives set active = false where id = $1', [executive]));
+    assert.deepEqual(await lead('existing'), row);
+    await assert.rejects(actor(manager, () => change('workflow', executive, null, null)), /active sales executive/);
+    await actor(admin, () => db.query('update public.sales_executives set active = true where id = $1', [executive]));
   });
   await t.test('deleting a manager login preserves leads, executive ownership, and notes', async () => {
     const row = await lead('existing');
