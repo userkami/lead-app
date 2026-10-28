@@ -27,7 +27,7 @@ alter table public.sales_executives
   add constraint sales_executives_destination_check check (
     (destination_type = 'individual' and nullif(btrim(whatsapp_number), '') is not null and whatsapp_group_link is null)
     or
-    (destination_type = 'group' and whatsapp_number is null and coalesce(whatsapp_group_link ~ '^https://chat\.whatsapp\.com/[A-Za-z0-9_-]+/?$', false))
+    (destination_type = 'group' and whatsapp_number is null and coalesce(whatsapp_group_link ~ '^https://chat\.whatsapp\.com/[A-Za-z0-9_-]+/?([?][^[:space:]#]+)?$', false))
   );
 
 commit;

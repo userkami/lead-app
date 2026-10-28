@@ -27,6 +27,8 @@ test('WhatsApp groups store a validated invite link instead of a phone number', 
   assert.deepEqual(executiveFields({ ...valid, name: ' Team Alpha ', destination_type: 'group', whatsapp_group_link: ' https://chat.whatsapp.com/AbCdEf123_- ' }), {
     name: 'Team Alpha', whatsapp_number: null, whatsapp_group_link: 'https://chat.whatsapp.com/AbCdEf123_-', destination_type: 'group', active: true,
   });
+  const tracked = 'https://chat.whatsapp.com/JdaxDirJ55UCrV7Bq0ELPg?s=sw&p=i&mlu=4&ilr=4&iam=2';
+  assert.equal(executiveFields({ ...valid, destination_type: 'group', whatsapp_group_link: tracked }).whatsapp_group_link, tracked);
   for (const whatsapp_group_link of ['', 'https://wa.me/923001234567', 'http://chat.whatsapp.com/Invite', 'https://example.com/group']) {
     assert.throws(() => executiveFields({ ...valid, destination_type: 'group', whatsapp_group_link }), /valid WhatsApp group invite link/);
   }

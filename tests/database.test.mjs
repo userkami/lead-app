@@ -125,7 +125,7 @@ test('database migration and assignment permissions in isolated PostgreSQL', asy
     assert.equal(deleted.rows[0].id, id);
   });
   await t.test('admin can create a WhatsApp group and staff can assign a lead to it', async () => {
-    const created = await actor(admin, () => db.query("insert into public.sales_executives (name, destination_type, whatsapp_number, whatsapp_group_link) values ('Team Alpha', 'group', null, 'https://chat.whatsapp.com/AbCdEf123_-') returning *"));
+    const created = await actor(admin, () => db.query("insert into public.sales_executives (name, destination_type, whatsapp_number, whatsapp_group_link) values ('Team Alpha', 'group', null, 'https://chat.whatsapp.com/AbCdEf123_-?s=sw&p=i&mlu=4') returning *"));
     const group = created.rows[0];
     assert.equal(group.destination_type, 'group');
     assert.equal(group.whatsapp_number, null);
