@@ -19,6 +19,7 @@ Lead Manager turns Meta lead submissions into an organized sales pipeline. Leads
 - **Automatic lead ingestion** from Meta through Google Sheets and n8n
 - **Role-based access** for administrators and managers
 - **Lead assignment workflow** with safe reassignment and unassignment
+- **Assignment directory** with per-agent and per-group lead lists and status totals
 - **WhatsApp handoff** to individual executives or team-leader groups
 - **Pipeline tracking** across Created, Assigned, Contacted, Closed, and Lost
 - **Fast filtering** by status, city, search term, and Pakistan-based date ranges
@@ -50,6 +51,7 @@ The n8n workflow owns lead ingestion. The CRM owns assignment, status, notes, st
 | View and filter leads | ✓ | ✓ |
 | Update status and notes | ✓ | ✓ |
 | Assign, reassign, or unassign leads | ✓ | ✓ |
+| View leads grouped by agent or WhatsApp group | ✓ | ✓ |
 | Send lead details through WhatsApp | ✓ | ✓ |
 | Manage individuals and WhatsApp groups | ✓ | — |
 | Create, edit, or delete staff users | ✓ | — |
@@ -182,6 +184,7 @@ Database tests run in isolated PGlite PostgreSQL instances and do not modify the
 ```text
 app/
 ├── api/users/route.js       # Server-only staff administration API
+├── AssignmentsPanel.js      # Per-destination lead and status views
 ├── ExecutivesPanel.js       # Sales executive management
 ├── UsersPanel.js            # Admin user management
 ├── page.js                  # Dashboard, authentication, and lead workflow

@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase';
 import { waNumber, ago, pakistanDateKey, dateRangeForPreset } from '../lib/util';
 import UsersPanel from './UsersPanel';
 import ExecutivesPanel from './ExecutivesPanel';
+import AssignmentsPanel from './AssignmentsPanel';
 import Icon from './Icon';
 
 const STATUSES = ['UNASSIGNED', 'ASSIGNED', 'CONTACTED', 'CLOSED', 'LOST', 'ALL'];
@@ -108,7 +109,7 @@ function Leads() {
     <main className="app-shell">
       <header className="app-header">
         <div className="brand-lockup"><span className="brand-mark"><Icon name="spark"/></span><div>Lead Manager<span className="eyebrow">MOBILE CRM · {me?.role || 'Team'}</span></div></div>
-        <button className="icon-button" aria-label="Sign out" title="Sign out" onClick={() => supabase.auth.signOut()}><Icon name="logout"/></button>
+        <div className="app-header-actions"><button className="icon-button" aria-label="Refresh workspace" title="Refresh workspace" onClick={load}><Icon name="refresh"/></button><button className="icon-button" aria-label="Sign out" title="Sign out" onClick={() => supabase.auth.signOut()}><Icon name="logout"/></button></div>
       </header>
       {view === 'leads' && <section className="dashboard-top">
         <div className="welcome-row"><div><p className="eyebrow">YOUR PIPELINE, IN FOCUS</p><h1>Dashboard<span className="accent">.</span></h1></div><span className="profile-avatar">{(me?.full_name || 'LM').slice(0, 2).toUpperCase()}</span></div>
@@ -138,8 +139,10 @@ function Leads() {
       </section>}
 
       {loadError && <p role="alert" className="m-3 rounded-xl bg-red-50 p-3 text-red-700">{loadError}</p>}
-      {view === 'users' && me?.role === 'admin' ? <UsersPanel onUpdated={load} /> : view === 'executives' && me?.role === 'admin' ? <ExecutivesPanel executives={execs} onUpdated={load} /> : <>
-      <div className="lead-list">
+      {view === 'users' && me?.role === 'admin' && <UsersPanel onUpdated={load} />}
+      {view === 'executives' && me?.role === 'admin' && <ExecutivesPanel executives={execs} onUpdated={load} />}
+      {view === 'assignments' && <AssignmentsPanel executives={execs} leads={leads} onOpen={setOpen} />}
+      {view === 'leads' && <div className="lead-list">
         {loading && <div className="empty-state" role="status"><Icon name="refresh" size={28}/><h3>Getting your leads ready</h3><p>Your workspace is loading.</p></div>}
         {shown.map((l) => (
           <button key={l.id} onClick={() => setOpen(l)} className="lead-card">
@@ -150,11 +153,10 @@ function Leads() {
           </button>
         ))}
         {!loading && !shown.length && <div className="empty-state"><Icon name="search" size={30}/><h3>A little room for opportunity</h3><p>No leads match these filters.</p><button className="btn secondary" onClick={() => { setSt('ALL'); setCity(''); setQ(''); applyPreset('all'); }}>Show all leads</button></div>}
-      </div>
+      </div>}
 
       {open && <Sheet lead={open} execs={execs} exName={exName} dup={dup} reload={load} onClose={() => setOpen(null)} />}
-      </>}
-      <nav className="bottom-nav" aria-label="Main navigation"><button aria-current={view === 'leads' ? 'page' : undefined} onClick={() => setView('leads')}><Icon name="grid"/><span>Leads</span></button>{me?.role === 'admin' && <><button aria-current={view === 'executives' ? 'page' : undefined} onClick={() => setView('executives')}><Icon name="briefcase"/><span>Destinations</span></button><button aria-current={view === 'users' ? 'page' : undefined} onClick={() => setView('users')}><Icon name="users"/><span>Team</span></button></>}<button onClick={load} aria-label="Refresh workspace"><Icon name="refresh"/><span>Refresh</span></button></nav>
+      <nav className="bottom-nav" aria-label="Main navigation"><button aria-current={view === 'leads' ? 'page' : undefined} onClick={() => setView('leads')}><Icon name="grid"/><span>Leads</span></button><button aria-current={view === 'assignments' ? 'page' : undefined} onClick={() => setView('assignments')}><Icon name="users"/><span>Assignments</span></button>{me?.role === 'admin' && <><button aria-current={view === 'executives' ? 'page' : undefined} onClick={() => setView('executives')}><Icon name="briefcase"/><span>Destinations</span></button><button aria-current={view === 'users' ? 'page' : undefined} onClick={() => setView('users')}><Icon name="users"/><span>Team</span></button></>}</nav>
     </main>
   );
 }
