@@ -154,7 +154,7 @@ function Leads() {
 
       {open && <Sheet lead={open} execs={execs} exName={exName} dup={dup} reload={load} onClose={() => setOpen(null)} />}
       </>}
-      <nav className="bottom-nav" aria-label="Main navigation"><button aria-current={view === 'leads' ? 'page' : undefined} onClick={() => setView('leads')}><Icon name="grid"/><span>Leads</span></button>{me?.role === 'admin' && <><button aria-current={view === 'executives' ? 'page' : undefined} onClick={() => setView('executives')}><Icon name="briefcase"/><span>Executives</span></button><button aria-current={view === 'users' ? 'page' : undefined} onClick={() => setView('users')}><Icon name="users"/><span>Team</span></button></>}<button onClick={load} aria-label="Refresh workspace"><Icon name="refresh"/><span>Refresh</span></button></nav>
+      <nav className="bottom-nav" aria-label="Main navigation"><button aria-current={view === 'leads' ? 'page' : undefined} onClick={() => setView('leads')}><Icon name="grid"/><span>Leads</span></button>{me?.role === 'admin' && <><button aria-current={view === 'executives' ? 'page' : undefined} onClick={() => setView('executives')}><Icon name="briefcase"/><span>Destinations</span></button><button aria-current={view === 'users' ? 'page' : undefined} onClick={() => setView('users')}><Icon name="users"/><span>Team</span></button></>}<button onClick={load} aria-label="Refresh workspace"><Icon name="refresh"/><span>Refresh</span></button></nav>
     </main>
   );
 }
@@ -187,7 +187,26 @@ function Sheet({ lead, execs, exName, dup, reload, onClose }) {
   const activeExecs = execs.filter((ex) => ex.active);
   const num = waNumber(lead.whatsapp_number);
   const msg = `New lead: ${lead.full_name} | +${num} | ${lead.city || '-'} | Interested in: ${lead.property_type_interest || '-'}`;
-  const send = (ex) => { location.href = `https://wa.me/${waNumber(ex.whatsapp_number)}?text=${encodeURIComponent(msg)}`; };
+  const copyMessage = async () => {
+    try { await navigator.clipboard.writeText(msg); return true; }
+    catch {
+      const field = document.createElement('textarea');
+      field.value = msg; field.setAttribute('readonly', ''); field.style.position = 'fixed'; field.style.opacity = '0';
+      document.body.appendChild(field); field.select();
+      try { return document.execCommand('copy'); }
+      catch { return false; }
+      finally { field.remove(); }
+    }
+  };
+  const send = async (ex) => {
+    if (ex.destination_type === 'group') {
+      if (!await copyMessage()) window.prompt('Assignment saved. Copy these lead details before opening the WhatsApp group:', msg);
+      location.href = ex.whatsapp_group_link;
+      return true;
+    }
+    location.href = `https://wa.me/${waNumber(ex.whatsapp_number)}?text=${encodeURIComponent(msg)}`;
+    return true;
+  };
   const assign = async (ex, whatsapp = false) => {
     if (pending) return;
     if (ex === undefined) { setError('Choose an active executive before reassigning.'); return; }
@@ -199,8 +218,9 @@ function Sheet({ lead, execs, exName, dup, reload, onClose }) {
         p_expected_exec: lead.assigned_to || null, p_expected_at: lead.assigned_at || null,
       });
       if (result.error) throw result.error;
-      await reload(); onClose();
-      if (whatsapp && ex) send(ex);
+      await reload();
+      if (whatsapp && ex && !await send(ex)) return;
+      onClose();
     } catch (e) { setError(e.message || 'Assignment could not be changed.'); }
     finally { setPending(false); }
   };
@@ -235,21 +255,21 @@ function Sheet({ lead, execs, exName, dup, reload, onClose }) {
         <fieldset disabled={pending} className="space-y-4">
         {!lead.assigned_to ? (
           <div>
-            <p className="text-sm font-medium mb-2">Assign via WhatsApp</p>
+            <p className="text-sm font-medium mb-2">Assign and share through WhatsApp</p>
             <div className="space-y-2">
-              {activeExecs.map((ex) => <button key={ex.id} onClick={() => assign(ex, true)} className="btn w-full bg-green-600 text-white text-left">{ex.name}</button>)}
-              {!activeExecs.length && <p className="text-sm text-slate-500">No active executives. Add some in the sales_executives table.</p>}
+              {activeExecs.map((ex) => <button key={ex.id} onClick={() => assign(ex, true)} className="btn w-full bg-green-600 text-white text-left">{ex.destination_type === 'group' ? `Assign, copy & open ${ex.name}` : `Assign to ${ex.name}`}</button>)}
+              {!activeExecs.length && <p className="text-sm text-slate-500">No active destinations. Ask an admin to add an individual or WhatsApp group.</p>}
             </div>
           </div>
         ) : (
           <div className="space-y-3">
-            <p className="text-sm">Assigned to <b>{exName[lead.assigned_to] || 'Unknown executive'}</b>{owner && !owner.active && ' (inactive)'} {ago(lead.assigned_at)}</p>
-            {owner && <button onClick={() => send(owner)} className="btn w-full bg-green-600 text-white">Resend to {owner.name}</button>}
+            <p className="text-sm">Assigned to <b>{exName[lead.assigned_to] || 'Unknown destination'}</b>{owner?.destination_type === 'group' && ' · WhatsApp group'}{owner && !owner.active && ' (inactive)'} {ago(lead.assigned_at)}</p>
+            {owner && <button onClick={() => send(owner)} className="btn w-full bg-green-600 text-white">{owner.destination_type === 'group' ? `Copy lead & open ${owner.name}` : `Resend to ${owner.name}`}</button>}
             <div className="rounded-xl border p-3 space-y-2">
               <label className="block text-sm font-medium" htmlFor="next-owner">Reassign lead</label>
               <select id="next-owner" className="inp" value={nextOwner} onChange={(e) => setNextOwner(e.target.value)}>
-                <option value="">Choose another executive</option>
-                {activeExecs.filter((ex) => ex.id !== lead.assigned_to).map((ex) => <option key={ex.id} value={ex.id}>{ex.name}</option>)}
+                <option value="">Choose another destination</option>
+                {activeExecs.filter((ex) => ex.id !== lead.assigned_to).map((ex) => <option key={ex.id} value={ex.id}>{ex.name}{ex.destination_type === 'group' ? ' · Group' : ''}</option>)}
               </select>
               <p className="text-xs text-slate-500">Resets status to Assigned and keeps saved notes. You can send the lead via WhatsApp afterward.</p>
               <button disabled={!nextOwner || pending} className="btn bg-blue-100 text-blue-800" onClick={() => assign(activeExecs.find((ex) => ex.id === nextOwner))}>Reassign</button>

@@ -15,8 +15,15 @@ create table public.profiles (
 create table public.sales_executives (
   id uuid primary key default gen_random_uuid(),
   name text not null,
-  whatsapp_number text not null,
-  active boolean not null default true
+  whatsapp_number text,
+  active boolean not null default true,
+  destination_type text not null default 'individual' check (destination_type in ('individual','group')),
+  whatsapp_group_link text,
+  constraint sales_executives_destination_check check (
+    (destination_type = 'individual' and nullif(btrim(whatsapp_number), '') is not null and whatsapp_group_link is null)
+    or
+    (destination_type = 'group' and whatsapp_number is null and coalesce(whatsapp_group_link ~ '^https://chat\.whatsapp\.com/[A-Za-z0-9_-]+/?$', false))
+  )
 );
 alter table public.meta_leads
   add column assigned_to uuid references public.sales_executives(id),

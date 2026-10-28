@@ -46,8 +46,10 @@ test('database migration and assignment permissions in isolated PostgreSQL', asy
     grant select on public.sales_executives to anon;
   `);
   const migration = await readFile(new URL('../supabase/user-management.sql', import.meta.url), 'utf8');
+  const groupMigration = await readFile(new URL('../supabase/whatsapp-groups.sql', import.meta.url), 'utf8');
   const before = (await db.query("select * from public.meta_leads where id = 'existing'")).rows[0];
   await db.exec(migration);
+  await db.exec(groupMigration);
 
   async function actor(id, action, role = 'authenticated') {
     await db.exec(`set role ${role};`);
@@ -63,6 +65,7 @@ test('database migration and assignment permissions in isolated PostgreSQL', asy
   await t.test('migration preserves existing values and can be rerun', async () => {
     assert.deepEqual(await lead('existing'), before);
     await db.exec(migration);
+    await db.exec(groupMigration);
     assert.deepEqual(await lead('existing'), before);
   });
   await t.test('manager can assign, reassign, and unassign while preserving notes', async () => {
@@ -120,6 +123,22 @@ test('database migration and assignment permissions in isolated PostgreSQL', asy
     assert.equal((await db.query('select active from public.sales_executives where id = $1', [id])).rows[0].active, true);
     const deleted = await actor(admin, () => db.query('delete from public.sales_executives where id = $1 returning id', [id]));
     assert.equal(deleted.rows[0].id, id);
+  });
+  await t.test('admin can create a WhatsApp group and staff can assign a lead to it', async () => {
+    const created = await actor(admin, () => db.query("insert into public.sales_executives (name, destination_type, whatsapp_number, whatsapp_group_link) values ('Team Alpha', 'group', null, 'https://chat.whatsapp.com/AbCdEf123_-') returning *"));
+    const group = created.rows[0];
+    assert.equal(group.destination_type, 'group');
+    assert.equal(group.whatsapp_number, null);
+    await db.query("insert into public.meta_leads (id, notes) values ('group-workflow', 'Group follow-up')");
+    await actor(manager, () => change('group-workflow', group.id, null, null));
+    const row = await lead('group-workflow');
+    assert.equal(row.assigned_to, group.id);
+    assert.equal(row.lead_status, 'ASSIGNED');
+    assert.equal(row.notes, 'Group follow-up');
+  });
+  await t.test('database rejects invalid group destinations', async () => {
+    await assert.rejects(actor(admin, () => db.query("insert into public.sales_executives (name, destination_type, whatsapp_number, whatsapp_group_link) values ('Bad group', 'group', null, 'https://example.com/not-whatsapp')")), /sales_executives_destination_check/);
+    await assert.rejects(actor(admin, () => db.query("insert into public.sales_executives (name, destination_type, whatsapp_number) values ('Missing link', 'group', null)")), /sales_executives_destination_check/);
   });
   await t.test('manager and anonymous requests cannot create, update, or delete executives', async () => {
     for (const [id, role] of [[manager, 'authenticated'], [null, 'anon']]) {

@@ -5,7 +5,7 @@
 [![Next.js](https://img.shields.io/badge/Next.js-14-0b0b0f?logo=nextdotjs&logoColor=white)](https://nextjs.org/)
 [![Supabase](https://img.shields.io/badge/Supabase-PostgreSQL-3fcf8e?logo=supabase&logoColor=white)](https://supabase.com/)
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-3-38bdf8?logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
-[![Tests](https://img.shields.io/badge/tests-29_passing-18c896)](#quality-and-testing)
+[![Tests](https://img.shields.io/badge/tests-32_passing-18c896)](#quality-and-testing)
 
 Lead Manager turns Meta lead submissions into an organized sales pipeline. Leads flow from Google Sheets through n8n into Supabase, where admins and managers can search, filter, assign, reassign, update, and follow up from a fast mobile interface.
 
@@ -19,7 +19,7 @@ Lead Manager turns Meta lead submissions into an organized sales pipeline. Leads
 - **Automatic lead ingestion** from Meta through Google Sheets and n8n
 - **Role-based access** for administrators and managers
 - **Lead assignment workflow** with safe reassignment and unassignment
-- **WhatsApp handoff** to active sales executives
+- **WhatsApp handoff** to individual executives or team-leader groups
 - **Pipeline tracking** across Created, Assigned, Contacted, Closed, and Lost
 - **Fast filtering** by status, city, search term, and Pakistan-based date ranges
 - **User management** for creating, editing, and removing staff accounts
@@ -51,7 +51,7 @@ The n8n workflow owns lead ingestion. The CRM owns assignment, status, notes, st
 | Update status and notes | ✓ | ✓ |
 | Assign, reassign, or unassign leads | ✓ | ✓ |
 | Send lead details through WhatsApp | ✓ | ✓ |
-| Manage sales executives | ✓ | — |
+| Manage individuals and WhatsApp groups | ✓ | — |
 | Create, edit, or delete staff users | ✓ | — |
 
 Row Level Security protects browser access to CRM data. Staff permissions are checked in PostgreSQL, while privileged Auth administration runs only through the server-side user API. The Supabase secret key must never reach the browser.
@@ -109,7 +109,7 @@ Before the first database setup:
 
 The initial script is transactional and adds the CRM fields, staff tables, functions, and RLS policies without updating existing lead rows. Do not rerun it after a successful setup.
 
-For a database that already used the original schema, run [`supabase/user-management.sql`](supabase/user-management.sql) once instead. It adds protected staff management, last-admin protection, and safe lead reassignment.
+For a database that already used the original schema, run [`supabase/user-management.sql`](supabase/user-management.sql) once instead. It adds protected staff management, last-admin protection, and safe lead reassignment. Then run [`supabase/whatsapp-groups.sql`](supabase/whatsapp-groups.sql) to add group destinations while preserving every existing executive and assignment.
 
 ### 4. Start development
 
@@ -135,6 +135,8 @@ This allows n8n to refresh Meta data without resetting the work performed by the
 ## Lead assignment behavior
 
 - Assignment sets the lead status to `ASSIGNED`.
+- Individual destinations open a private WhatsApp chat with the lead message prefilled.
+- Group destinations copy the lead message and open the selected team's WhatsApp invite link; the user pastes and sends it in the group.
 - Reassignment keeps saved notes and resets the status to `ASSIGNED`.
 - Unassignment keeps saved notes and resets the status to `CREATED`.
 - Inactive executives remain visible on existing assignments but cannot receive new leads.
@@ -162,7 +164,7 @@ npm test
 npm run build
 ```
 
-The 29 automated tests cover:
+The 32 automated tests cover:
 
 - Authentication and admin-only user management
 - Validation, rollback, and failure handling
@@ -170,6 +172,7 @@ The 29 automated tests cover:
 - Assignment, reassignment, unassignment, and stale-write protection
 - Last-admin protection
 - Executive lifecycle and foreign-key safety
+- WhatsApp group link validation and group assignment
 - WhatsApp number normalization
 
 Database tests run in isolated PGlite PostgreSQL instances and do not modify the live Supabase project.
@@ -190,7 +193,8 @@ lib/
 └── supabase.js              # Browser Supabase client
 supabase/
 ├── schema.sql               # Initial database setup
-└── user-management.sql      # Existing-installation upgrade
+├── user-management.sql      # Staff-management upgrade
+└── whatsapp-groups.sql      # Group-destination upgrade
 tests/                       # API, database, permission, and helper tests
 ```
 
@@ -199,6 +203,7 @@ tests/                       # API, database, permission, and helper tests
 - `.env.local`, build output, local Vercel settings, and dependencies are ignored by Git.
 - The publishable or anon key is intentionally used in the browser and must be protected by RLS.
 - The secret key is used only by the server-side user API and the private n8n credential store.
+- WhatsApp group links are visible only to authenticated staff; reset links must be updated in the CRM.
 - Admin restrictions are enforced on the server and in PostgreSQL, not only hidden in the interface.
 - The final admin cannot be deleted or demoted.
 - Deleting a staff login preserves lead ownership, assignments, and notes.
