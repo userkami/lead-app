@@ -24,9 +24,34 @@ Lead Manager turns Meta lead submissions into an organized sales pipeline. Leads
 - **Pipeline tracking** across Created, Assigned, Contacted, Closed, and Lost
 - **Fast filtering** by status, city, search term, and Pakistan-based date ranges
 - **User management** for creating, editing, and removing staff accounts
-- **Sales executive management** for names, WhatsApp numbers, and availability
+- **Destination management** for individuals, WhatsApp groups, and availability
 - **Duplicate detection** based on normalized WhatsApp numbers
 - **Realtime refresh** when lead records change in Supabase
+
+## Assignment visibility
+
+Admins and managers share the same **Assignments** workspace. It gives the team a live directory of every individual executive and WhatsApp group, including how many leads are currently assigned to each destination.
+
+<table>
+  <tr>
+    <td align="center"><img src="docs/assignments-mobile.png" alt="Assignment directory showing individuals and WhatsApp groups" width="320" /></td>
+    <td align="center"><img src="docs/assignment-detail-mobile.png" alt="Assigned leads and status totals for one destination" width="320" /></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Individuals and groups in one directory</sub></td>
+    <td align="center"><sub>Per-destination status totals and lead details</sub></td>
+  </tr>
+</table>
+
+Selecting a destination shows:
+
+- Every lead currently assigned to that individual or group
+- Totals for Assigned, Contacted, Closed, and Lost
+- The current status, city, property interest, and age of each lead
+- Direct access to the normal lead detail sheet for notes, status changes, reassignment, calls, and WhatsApp actions
+- Active and inactive destinations, so historical assignments remain visible
+
+The directory is read-only for managers. Admins manage destination records separately from the **Destinations** tab.
 
 ## How it works
 
@@ -38,11 +63,11 @@ flowchart LR
     D --> E[Lead Manager]
     E --> F[Admin]
     E --> G[Manager]
-    F & G --> H[Sales executives]
+    F & G --> H[Individuals and WhatsApp groups]
     H -->|WhatsApp follow-up| I[Lead]
 ```
 
-The n8n workflow owns lead ingestion. The CRM owns assignment, status, notes, staff access, and executive management. Keeping those responsibilities separate prevents scheduled imports from overwriting sales activity.
+The n8n workflow owns lead ingestion. The CRM owns assignment, status, notes, staff access, and destination management. Keeping those responsibilities separate prevents scheduled imports from overwriting sales activity.
 
 ## Access model
 
@@ -67,7 +92,7 @@ Row Level Security protects browser access to CRM data. Staff permissions are ch
 | Database and authentication | Supabase Auth and PostgreSQL |
 | Automation | n8n scheduled workflow |
 | Lead source | Meta Lead Ads through Google Sheets |
-| Messaging | WhatsApp deep links |
+| Messaging | WhatsApp direct-chat and group deep links |
 | Testing | Node test runner and PGlite |
 | Hosting | Vercel-compatible |
 
@@ -153,7 +178,7 @@ Date filters use `Asia/Karachi` boundaries and combine with status, city, and te
 2. Add all three environment variables from `.env.example` in the Vercel project settings.
 3. Keep `SUPABASE_SECRET_KEY` available only to the server runtime.
 4. Deploy the `main` branch.
-5. Verify login, user administration, executive management, assignment, notes, and the next n8n synchronization.
+5. Verify login, user administration, destination management, the Assignments directory, notes, and the next n8n synchronization.
 
 Before a public production launch, update and validate framework dependencies against current security advisories.
 
