@@ -6,6 +6,7 @@ import UsersPanel from './UsersPanel';
 import ExecutivesPanel from './ExecutivesPanel';
 import AssignmentsPanel from './AssignmentsPanel';
 import Icon from './Icon';
+import ThemeToggle from './ThemeToggle';
 
 const STATUSES = ['UNASSIGNED', 'ASSIGNED', 'CONTACTED', 'CLOSED', 'LOST', 'ALL'];
 const chip = { CREATED: 'bg-amber-100 text-amber-800', ASSIGNED: 'bg-blue-100 text-blue-800', CONTACTED: 'bg-violet-100 text-violet-800', CLOSED: 'bg-green-100 text-green-800', LOST: 'bg-slate-200 text-slate-700' };
@@ -35,6 +36,7 @@ function Login() {
   };
   return (
     <main className="login-screen">
+      <div className="login-theme"><ThemeToggle /></div>
       <div className="login-brand"><span className="brand-mark"><Icon name="spark" size={28}/></span><span>Lead Manager<span className="eyebrow">YOUR SALES WORKSPACE</span></span></div>
       <div className="login-intro"><span className="eyebrow">EVERY CONNECTION COUNTS</span><h1>Your next opportunity<br/>starts here<span>.</span></h1><p>A focused space for your leads, your team,<br/>and everything that comes next.</p></div>
       <form onSubmit={go} className="login-card">
@@ -103,20 +105,34 @@ function Leads() {
   const today = leads.filter((l) => pakistanDateKey(l.created_time) === pakistanDateKey()).length;
   const yesterday = leads.filter((l) => pakistanDateKey(l.created_time) === dateRangeForPreset('yesterday').from).length;
   const last7 = leads.filter((l) => { const key = pakistanDateKey(l.created_time); const range = dateRangeForPreset('last7'); return key >= range.from && key <= range.to; }).length;
+  const dailyCounts = Array.from({ length: 7 }, (_, i) => { const day = new Date(); day.setDate(day.getDate() - (6 - i)); return leads.filter(l => pakistanDateKey(l.created_time) === pakistanDateKey(day)).length; });
   const applyPreset = (preset) => { setDatePreset(preset); if (preset !== 'custom') { setCustomFrom(''); setCustomTo(''); } };
 
   return (
     <main className="app-shell">
       <header className="app-header">
-        <div className="brand-lockup"><span className="brand-mark"><Icon name="spark"/></span><div>Lead Manager<span className="eyebrow">MOBILE CRM · {me?.role || 'Team'}</span></div></div>
-        <div className="app-header-actions"><button className="icon-button" aria-label="Refresh workspace" title="Refresh workspace" onClick={load}><Icon name="refresh"/></button><button className="icon-button" aria-label="Sign out" title="Sign out" onClick={() => supabase.auth.signOut()}><Icon name="logout"/></button></div>
+        <div className="brand-lockup"><span className="brand-mark"><Icon name="spark"/></span><div>Lead Manager<span className="eyebrow">SALES WORKSPACE · {me?.role || 'Team'}</span></div></div>
+        <div className="app-header-actions"><ThemeToggle /><span className="profile-avatar" title={me?.full_name || "Team member"}>{(me?.full_name || "LM").split(" ").filter(Boolean).slice(0, 2).map(part => part[0]).join("").toUpperCase()}</span><button className="icon-button" aria-label="Refresh workspace" title="Refresh workspace" onClick={load}><Icon name="refresh"/></button><button className="icon-button" aria-label="Sign out" title="Sign out" onClick={() => supabase.auth.signOut()}><Icon name="logout"/></button></div>
       </header>
       {view === 'leads' && <section className="dashboard-top">
-        <div className="welcome-row"><div><p className="eyebrow">YOUR PIPELINE, IN FOCUS</p><h1>Dashboard<span className="accent">.</span></h1></div><span className="profile-avatar">{(me?.full_name || 'LM').slice(0, 2).toUpperCase()}</span></div>
-        <div className="overview-card"><div><span className="overview-greeting">Welcome Back</span><div className="overview-name">{me?.full_name || 'Team member'}</div><div className="overview-number"><Icon name="users" size={18}/><span>{unassigned} unassigned {unassigned === 1 ? 'lead is' : 'leads are'} ready for follow-up</span></div></div><button className="overview-link" onClick={() => { setSt('UNASSIGNED'); applyPreset('all'); setQ(''); setCity(''); }}>View<Icon name="arrow" size={18}/></button></div>
-        <div className="date-stats" aria-label="Lead date filters">
-          {[['today', 'Today', today], ['yesterday', 'Yesterday', yesterday], ['last7', 'Last 7 days', last7]].map(([preset, label, count]) => <button key={preset} aria-pressed={datePreset === preset} className={`stat-card ${datePreset === preset ? 'selected' : ''}`} onClick={() => applyPreset(preset)}><span>{label}<Icon name="arrow" size={14}/></span><strong>{count}</strong><small>leads received</small></button>)}
+        <div className="workspace-intro">
+          <div><p className="eyebrow">YOUR PIPELINE · {me?.full_name || 'TEAM WORKSPACE'}</p><h1>Turn new leads into<br className="desktop-break"/> real conversations.</h1></div>
+          <button className="btn primary follow-up-action" onClick={() => { setSt('UNASSIGNED'); applyPreset('all'); setQ(''); setCity(''); document.getElementById('lead-results')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }}>Review {unassigned} new {unassigned === 1 ? 'lead' : 'leads'}<Icon name="arrow" size={18}/></button>
         </div>
+        <div className="date-stats" aria-label="Lead date filters">
+          <button aria-pressed={datePreset === 'today'} className={`stat-card stat-today ${datePreset === 'today' ? 'selected' : ''}`} onClick={() => applyPreset('today')}>
+            <span className="stat-label"><span className="live-dot"/>Today<Icon name="arrow" size={17}/></span>
+            <strong>{today}</strong><span className="stat-caption">New leads received</span><span className="stat-foot">A fresh start, every day.<Icon name="calendar" size={18}/></span>
+          </button>
+          <button aria-pressed={datePreset === 'yesterday'} className={`stat-card stat-yesterday ${datePreset === 'yesterday' ? 'selected' : ''}`} onClick={() => applyPreset('yesterday')}>
+            <span className="stat-label">Yesterday<Icon name="arrow" size={17}/></span><div className="previous-total"><strong>{yesterday}</strong><span className="stat-caption">leads<br/>received</span></div><span className="stat-foot">The previous day</span>
+          </button>
+          <button aria-pressed={datePreset === 'last7'} className={`stat-card stat-week ${datePreset === 'last7' ? 'selected' : ''}`} onClick={() => applyPreset('last7')}>
+            <span className="stat-label">Last 7 days<Icon name="arrow" size={17}/></span><div className="week-total"><strong>{last7}</strong><span className="stat-caption">leads received</span></div>
+            <span className="week-chart" aria-hidden="true">{dailyCounts.map((count, i) => <span key={i} style={{ height: `${Math.max(7, count / Math.max(...dailyCounts, 1) * 100)}%` }} />)}</span><span className="stat-foot">Your week at a glance</span>
+          </button>
+        </div>
+        <div className="pipeline-label"><span className="eyebrow">THE FOLLOW-UP QUEUE</span><span>Make your next connection</span></div>
         <div className="search-row"><label className="search-box"><Icon name="search"/><input aria-label="Search leads" placeholder="Search name or number" value={q} onChange={(e) => setQ(e.target.value)}/>{q && <button aria-label="Clear search" onClick={() => setQ('')}><Icon name="close" size={16}/></button>}</label><button aria-expanded={filtersOpen} aria-controls="advanced-filters" aria-label="City and date filters" className={`icon-button filter-toggle ${filtersOpen || city || datePreset === 'custom' ? 'selected' : ''}`} onClick={() => setFiltersOpen(!filtersOpen)}><Icon name="filter"/></button></div>
         <div className="status-tabs" aria-label="Lead status">
           {STATUSES.map((s) => (
@@ -135,7 +151,7 @@ function Leads() {
             <input className="inp mt-1" type="date" value={customTo} onChange={(e) => { setCustomTo(e.target.value); setDatePreset('custom'); }} />
           </label>
         </div><p className="timezone-note">Dates use Pakistan time · UTC+5</p></div>}
-        <div className="results-heading"><h2>{st === 'ALL' ? 'All leads' : st[0] + st.slice(1).toLowerCase() + ' leads'}<span>{shown.length}</span></h2>{(datePreset !== 'all' || city) && <button className="clear-filter" onClick={() => { applyPreset('all'); setCity(''); }}>Clear filters<Icon name="close" size={13}/></button>}</div>
+        <div id="lead-results" className="results-heading"><h2>{st === 'ALL' ? 'All leads' : st[0] + st.slice(1).toLowerCase() + ' leads'}<span>{shown.length}</span></h2>{(datePreset !== 'all' || city) && <button className="clear-filter" onClick={() => { applyPreset('all'); setCity(''); }}>Clear filters<Icon name="close" size={13}/></button>}</div>
       </section>}
 
       {loadError && <p role="alert" className="m-3 rounded-xl bg-red-50 p-3 text-red-700">{loadError}</p>}
